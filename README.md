@@ -1,6 +1,8 @@
 # nix-home-server
 Simple home server with nix, k3s and flux
 
+### Note: This repo is still in development, and is not stable.
+
 ## Features
 
 1. Arr suite

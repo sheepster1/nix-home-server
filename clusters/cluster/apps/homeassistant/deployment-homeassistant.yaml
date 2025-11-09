@@ -1,0 +1,170 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: homeassistant
+  namespace: apps
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: homeassistant
+  template:
+    metadata:
+      labels:
+        app: homeassistant
+    spec:
+      hostAliases:
+        - ip: 127.0.0.1
+          hostnames:
+            - jellyfin.${cluster_domain}
+      terminationGracePeriodSeconds: 10
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      initContainers:
+        - name: init-ha-config
+          image: busybox
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              cp /defaults/configuration.yaml /config/configuration.yaml
+          volumeMounts:
+            - name: config-volume
+              subPath: homeassistant
+              mountPath: /config
+            - name: ha-config
+              mountPath: /defaults
+        - name: install-hacs
+          image: python:3.12-alpine
+          env:
+            - name: HACS_VERSION
+              value: "2.0.5"
+          command: ["/bin/sh","-c"]
+          args:
+            - |
+              set -euo pipefail
+              mkdir -p /config/custom_components
+              rm -rf /config/custom_components/hacs
+              python - <<'PY'
+              import os, json, urllib.request, zipfile, shutil
+              from pathlib import Path
+              
+              ver = os.environ.get("HACS_VERSION")
+              url = f"https://github.com/hacs/integration/releases/download/{ver}/hacs.zip"
+              zip_path = "/tmp/hacs.zip"
+              extract_root = Path("/tmp/hacs-extract")
+              dest_dir = Path("/config/custom_components/hacs")
+              
+              urllib.request.urlretrieve(url, zip_path)
+              
+              if extract_root.exists():
+                  shutil.rmtree(extract_root)
+              extract_root.mkdir(parents=True, exist_ok=True)
+              with zipfile.ZipFile(zip_path) as zf:
+                  zf.extractall(extract_root)
+              
+              def is_hacs_dir(path: Path) -> bool:
+                  manifest = path / "manifest.json"
+                  if not manifest.exists():
+                      return False
+                  try:
+                      data = json.loads(manifest.read_text())
+                  except Exception:
+                      return False
+                  domain = data.get("domain")
+                  return domain == "hacs"
+              
+              # 1) common layout: custom_components/hacs
+              candidate = extract_root / "custom_components" / "hacs"
+              if candidate.exists() and candidate.is_dir():
+                  src_dir = candidate
+              else:
+                  # 2) any directory named hacs
+                  found = None
+                  for root, dirs, files in os.walk(extract_root):
+                      for d in dirs:
+                          if d.lower() == "hacs":
+                              p = Path(root) / d
+                              found = p
+                              break
+                      if found:
+                          break
+                  if found is not None:
+                      src_dir = found
+                  else:
+                      # 3) flat archive with hacs files at root
+                      if is_hacs_dir(extract_root):
+                          src_dir = extract_root
+                      else:
+                          # 4) single top-level directory containing hacs files
+                          entries = [p for p in extract_root.iterdir() if p.is_dir()]
+                          if len(entries) == 1 and is_hacs_dir(entries[0]):
+                              src_dir = entries[0]
+                          else:
+                              raise RuntimeError("Could not locate HACS integration directory in archive")
+              
+              if dest_dir.exists():
+                  shutil.rmtree(dest_dir)
+              shutil.copytree(src_dir, dest_dir)
+              PY
+              chown -R 0:0 /config/custom_components || true
+          volumeMounts:
+            - name: config-volume
+              subPath: homeassistant
+              mountPath: /config
+      containers:
+        - name: homeassistant
+          securityContext:
+            privileged: true
+            fsGroup: 1000
+            capabilities:
+              add:
+                - NET_ADMIN
+                - NET_RAW
+          image: ghcr.io/home-assistant/home-assistant:stable
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: Asia/Jerusalem
+          ports:
+            - name: http
+              containerPort: 8123
+          volumeMounts:
+            - name: config-volume
+              subPath: homeassistant
+              mountPath: /config
+            - mountPath: /dev/ttyACM1
+              name: zigbee
+            - name: dbus
+              mountPath: /run/dbus
+              readOnly: true
+        - name: jellyfin-proxy
+          image: nginx:alpine
+          ports:
+            - containerPort: 18096
+              name: jellyfin-proxy
+          volumeMounts:
+            - name: jellyfin-proxy-config
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf
+      volumes:
+        - name: config-volume
+          persistentVolumeClaim:
+            claimName: config-pvc
+        - name: ha-config
+          configMap:
+            name: homeassistant-config
+        - name: zigbee
+          hostPath:
+            path: /dev/serial/by-id/usb-ITEAD_SONOFF_Zigbee_3.0_USB_Dongle_Plus_V2_20220810160716-if00
+        - name: dbus
+          hostPath:
+            path: /run/dbus
+            type: Directory
+        - name: jellyfin-proxy-config
+          configMap:
+            name: ha-jellyfin-proxy

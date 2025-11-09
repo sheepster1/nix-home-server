@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: zwave-js-ui-ingress
+  namespace: apps
+spec:
+  rules:
+    - host: zwavejs.${cluster_domain}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: zwave-js-ui
+                port:
+                  number: 8091   # UI
+    - host: zwavejs-ws.${cluster_domain}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: zwave-js-ui
+                port:
+                  number: 3000   # WebSocket for HA

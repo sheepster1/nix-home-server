@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- deployment-homeassistant.yaml
+- service-homeassistant.yaml
+- ingress-homeassistant.yaml
+- homeassistant-cm.yaml
+- ha-jellyfin-proxy.yaml
+- zwave-js

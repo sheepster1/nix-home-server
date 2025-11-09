@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: filebrowser
+  namespace: apps
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: filebrowser
+  template:
+    metadata:
+      labels:
+        app: filebrowser
+    spec:
+      securityContext:
+        runAsUser: 0
+        runAsGroup: 0
+      containers:
+        - name: filebrowser
+          image: filebrowser/filebrowser:latest
+          args: ["--noauth", "--root", "/mnt"] # Optional: remove to use built-in auth
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: config-volume
+              subPath: filebrowser/data
+              mountPath: /srv
+            - name: config-volume
+              subPath: filebrowser/database
+              mountPath: /database
+            - name: config-volume
+              subPath: filebrowser/config
+              mountPath: /config
+            - name: media-volume
+              mountPath: /mnt/media
+            - name: config-volume
+              mountPath: /mnt/config
+            - name: public-volume
+              mountPath: /mnt/public
+      volumes:
+        - name: media-volume
+          persistentVolumeClaim:
+            claimName: media-pvc
+        - name: config-volume
+          persistentVolumeClaim:
+            claimName: config-pvc
+        - name: public-volume
+          persistentVolumeClaim:
+            claimName: public-pvc
+

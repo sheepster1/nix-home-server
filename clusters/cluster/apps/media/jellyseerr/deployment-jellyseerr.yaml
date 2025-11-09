@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jellyseerr
+  namespace: apps
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jellyseerr
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: jellyseerr
+    spec:
+      containers:
+      - name: jellyseerr
+        image: fallenbagel/jellyseerr:latest # TODO: Change tag
+        env:
+        - name: TZ
+          value: Asia/Jerusalem
+        ports:
+        - containerPort: 5055
+          hostPort: 5055
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config
+          subPath: media/jellyseerr
+      volumes:
+      - name: config-volume
+        persistentVolumeClaim:
+          claimName: config-pvc

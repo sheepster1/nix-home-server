@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: radarr
+  namespace: apps
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: radarr
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: radarr
+    spec:
+      containers:
+      - name: radarr
+        image: lscr.io/linuxserver/radarr:latest
+        env:
+        - name: PUID
+          value: "1000"
+        - name: PGID
+          value: "100"
+        - name: TZ
+          value: Asia/Jerusalem
+        ports:
+        - containerPort: 7878
+        volumeMounts:
+        - name: media-volume
+          mountPath: /mnt/media
+        - name: downloads-volume
+          mountPath: /mnt/downloads
+        - name: config-volume
+          mountPath: config
+          subPath: media/radarr
+      volumes:
+      - name: media-volume
+        persistentVolumeClaim:
+          claimName: media-pvc
+      - name: downloads-volume
+        persistentVolumeClaim:
+          claimName: downloads-pvc
+      - name: config-volume
+        persistentVolumeClaim:
+          claimName: config-pvc

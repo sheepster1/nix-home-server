@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pihole
+  namespace: apps
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pihole
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: pihole
+    spec:
+      containers:
+      - name: pihole
+        image: docker.io/pihole/pihole@sha256:0def896a596e8d45780b6359dbf82fc8c75ef05b97e095452e67a0a4ccc95377
+        env:
+        - name: TZ
+          value: Asia/Jerusalem
+        - name: WEBPASSWORD
+          value: "1"
+        volumeMounts:
+        - name: config-volume
+          mountPath: "/etc/pihole"
+          subPath: pihole
+        - name: pihole-local-dnsmasq-volume
+          mountPath: "/etc/dnsmasq.d/02-custom-dns.conf"
+          subPath: 02-custom-dns.conf
+        ports:
+        - containerPort: 53
+          protocol: UDP
+          hostPort: 53
+        - containerPort: 53
+          protocol: TCP
+          hostPort: 53
+        - containerPort: 80
+          protocol: TCP
+      volumes:
+      - name: config-volume
+        persistentVolumeClaim:
+          claimName: config-pvc
+      - name: pihole-local-dnsmasq-volume
+        configMap:
+          name: dnsmasq-pihole-configmap

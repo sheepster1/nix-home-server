@@ -1,0 +1,84 @@
+# zwave-js-ui.yaml
+# Matches your convention: a SINGLE PVC named `config-pvc`, using a subPath just for this app.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zwave-js-ui
+  namespace: apps
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zwave-js-ui
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: zwave-js-ui
+    spec:
+      # Pin this to the node with the USB stick
+      # nodeSelector:
+      #   kubernetes.io/hostname: "<NODE_NAME>"
+      securityContext:
+        fsGroup: 1000
+      containers:
+        - name: zwave-js-ui
+          image: ghcr.io/zwave-js/zwave-js-ui:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: TZ
+              value: Asia/Jerusalem
+          ports:
+            - name: ui
+              containerPort: 8091     # Web UI
+            - name: ws
+              containerPort: 3000     # Z-Wave JS websocket for HA
+          securityContext:
+            privileged: true
+          volumeMounts:
+            # Use your single PVC with a dedicated subPath for zwave-js-ui data
+            - name: config-volume
+              mountPath: /usr/src/app/store
+              subPath: zwave-js-ui
+            # Stable serial path + udev from the host
+            - name: serial-by-id
+              mountPath: /dev/serial/by-id
+            - name: run-udev
+              mountPath: /run/udev
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8091
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8091
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+      volumes:
+        # Reuse your existing PVC `config-pvc`
+        - name: config-volume
+          persistentVolumeClaim:
+            claimName: config-pvc
+        - name: serial-by-id
+          hostPath:
+            path: /dev/serial/by-id
+            type: Directory
+        - name: run-udev
+          hostPath:
+            path: /run/udev
+            type: Directory
+

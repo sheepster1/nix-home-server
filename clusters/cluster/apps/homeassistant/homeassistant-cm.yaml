@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: homeassistant-config
+  namespace: apps
+data:
+  configuration.yaml: |
+    script: !include scripts.yaml
+    automation: !include automations.yaml
+    scene: !include scenes.yaml
+
+    homeassistant:
+      external_url: https://homeassistant.${cluster_domain}
+      internal_url: http://homeassistant:8123
+
+    http:
+      use_x_forwarded_for: true
+      trusted_proxies:
+        - 10.42.0.0/16   # Pod CIDR
+        - 10.43.0.0/16   # Service CIDR
+        - 127.0.0.1
+    default_config:
+    zeroconf:
+    ssdp:
+    # logger:
+    #   default: info
+    #   logs:
+    #     homeassistant.components.zeroconf: debug
+    #     homeassistant.components.ssdp: debug
+    #     pychromecast: debug 

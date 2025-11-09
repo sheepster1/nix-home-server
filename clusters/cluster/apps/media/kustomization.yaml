@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- volumes
+- jellyfin
+- jellyseerr
+- radarr
+- sonarr
+- bazarr
+- prowlarr
+- qbittorrent
+- flaresolverr
+

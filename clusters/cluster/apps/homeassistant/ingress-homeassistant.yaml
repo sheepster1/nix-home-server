@@ -1,0 +1,59 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: homeassistant-ingress
+  namespace: apps
+  annotations:
+    # Keep connections warm + avoid idle websocket drops
+    nginx.ingress.kubernetes.io/keep-alive: "75"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+
+    # Compression (helps JS bundles on mobile)
+    nginx.ingress.kubernetes.io/enable-gzip: "true"
+    nginx.ingress.kubernetes.io/gzip-proxied: "any"
+    nginx.ingress.kubernetes.io/gzip-min-length: "1024"
+    nginx.ingress.kubernetes.io/gzip-types: "text/plain text/css application/json application/javascript application/xml application/xhtml+xml image/svg+xml"
+    # If your ingress-nginx supports it:
+    nginx.ingress.kubernetes.io/enable-brotli: "true"
+
+    # Cache hints for HA app vs API
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      # Long-cache static assets for instant UI on return
+      location ~* ^/static/ {
+        expires 30d;
+        add_header Cache-Control "public, max-age=2592000, immutable" always;
+      }
+
+      # No-store for API/auth to avoid stale state
+      location ~* ^/(api|auth)/ {
+        add_header Cache-Control "no-store" always;
+      }
+
+      # App shell revalidates without full no-store
+      location = / {
+        add_header Cache-Control "no-cache" always;
+      }
+
+    # TLS session resumption (faster first handshake on mobile)
+    nginx.ingress.kubernetes.io/server-snippet: |
+      ssl_session_tickets on;
+      ssl_session_timeout 1d;
+      ssl_session_cache shared:SSL:10m;
+spec:
+  tls:
+    - hosts:
+        - homeassistant.${cluster_domain}
+      secretName: homeassistant-tls-secret
+  rules:
+    - host: homeassistant.${cluster_domain}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: homeassistant
+                port:
+                  number: 8123
